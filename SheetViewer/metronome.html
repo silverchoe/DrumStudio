@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tempo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0d0d0d;
+      font-family: 'Segoe UI', sans-serif;
+      color: #e0e0e0;
+    }
+
+    .container {
+      background: linear-gradient(160deg, #2a2a2a 0%, #1a1a1a 50%, #111 100%);
+      border: 1px solid #3a3a3a;
+      border-top: 1px solid #555;
+      padding: 40px 48px;
+      width: 440px;
+      box-shadow:
+        0 24px 60px rgba(0,0,0,0.8),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* 글로시 상단 하이라이트 */
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 50%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 100%);
+      pointer-events: none;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 6px;
+      color: #ccc;
+      text-transform: uppercase;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.15);
+    }
+
+    /* ── 박자 표시 ── */
+    .beats {
+      display: flex;
+      gap: 10px;
+    }
+
+    .beat-dot {
+      width: 16px;
+      height: 16px;
+      background: #222;
+      border: 1px solid #444;
+      transition: background 0.05s, box-shadow 0.05s;
+    }
+
+    .beat-dot.active {
+      background: #e0e0e0;
+      box-shadow: 0 0 10px rgba(255,255,255,0.6);
+      border-color: #fff;
+    }
+
+    .beat-dot.accent {
+      width: 20px;
+      height: 20px;
+    }
+
+    .beat-dot.active.accent {
+      background: #fff;
+      box-shadow: 0 0 16px rgba(255,255,255,0.9), 0 0 30px rgba(200,200,255,0.4);
+      border-color: #fff;
+    }
+
+    /* ── 도형 반짝이 영역 ── */
+    .shape-stage {
+      width: 100%;
+      height: 150px;
+      background: linear-gradient(180deg, #0a0a0a 0%, #111 100%);
+      border: 1px solid #2a2a2a;
+      border-top: 1px solid #333;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* 내부 글로시 라인 */
+    .shape-stage::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+    }
+
+    .shape-particle {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      animation: burst 0.55s ease-out forwards;
+      transform-origin: center;
+      pointer-events: none;
+      filter: drop-shadow(0 0 6px currentColor);
+    }
+
+    @keyframes burst {
+      0%   { opacity: 1; transform: scale(0.3) rotate(0deg); }
+      40%  { opacity: 1; transform: scale(1.2) rotate(20deg); }
+      100% { opacity: 0; transform: scale(0.6) rotate(-10deg) translateY(-20px); }
+    }
+
+    /* ── BPM 표시 ── */
+    .bpm-display {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .bpm-btn {
+      width: 38px;
+      height: 38px;
+      border: 1px solid #444;
+      border-bottom: 1px solid #222;
+      border-top: 1px solid #555;
+      background: linear-gradient(180deg, #333 0%, #222 100%);
+      color: #ccc;
+      font-size: 1.3rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s, transform 0.1s;
+      user-select: none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 2px 4px rgba(0,0,0,0.5);
+    }
+
+    .bpm-btn:hover {
+      background: linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 100%);
+    }
+    .bpm-btn:active {
+      transform: scale(0.93);
+      background: linear-gradient(180deg, #1a1a1a 0%, #222 100%);
+    }
+
+    .bpm-number {
+      font-size: 3.4rem;
+      font-weight: 700;
+      color: #fff;
+      width: 110px;
+      text-align: center;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(255,255,255,0.2);
+    }
+
+    .bpm-label {
+      font-size: 0.72rem;
+      color: #666;
+      letter-spacing: 3px;
+      text-align: center;
+    }
+
+    /* ── 슬라이더 ── */
+    .slider-wrap { width: 100%; }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(to right, #aaa var(--pct, 50%), #2a2a2a var(--pct, 50%));
+      outline: none;
+      cursor: pointer;
+      border: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(180deg, #eee 0%, #aaa 100%);
+      border: 1px solid #888;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.4);
+      transition: transform 0.1s;
+    }
+
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+    .slider-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.68rem;
+      color: #555;
+      margin-top: 6px;
+      letter-spacing: 1px;
+    }
+
+    /* ── 박자표 선택 ── */
+    .time-sig {
+      display: flex;
+      gap: 8px;
+    }
+
+    .sig-btn {
+      padding: 7px 14px;
+      border: 1px solid #3a3a3a;
+      border-top: 1px solid #4a4a4a;
+      background: linear-gradient(180deg, #2a2a2a 0%, #1e1e1e 100%);
+      color: #888;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.1s;
+      letter-spacing: 1px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .sig-btn:hover { border-color: #666; color: #bbb; }
+    .sig-btn.selected {
+      background: linear-gradient(180deg, #555 0%, #333 100%);
+      border-color: #777;
+      border-top-color: #999;
+      color: #fff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 8px rgba(255,255,255,0.05);
+    }
+
+    /* ── 시작/정지 버튼 ── */
+    .start-btn {
+      width: 76px;
+      height: 76px;
+      border: 1px solid #555;
+      border-top: 1px solid #888;
+      background: linear-gradient(160deg, #444 0%, #222 60%, #1a1a1a 100%);
+      color: #eee;
+      font-size: 1.8rem;
+      cursor: pointer;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.1),
+        0 8px 20px rgba(0,0,0,0.7);
+      transition: transform 0.12s, box-shadow 0.12s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .start-btn:hover {
+      transform: scale(1.05);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 12px 28px rgba(0,0,0,0.8);
+    }
+
+    .start-btn:active { transform: scale(0.93); }
+
+    .start-btn.running {
+      background: linear-gradient(160deg, #555 0%, #2a2a2a 60%, #111 100%);
+      border-color: #777;
+      color: #fff;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.2),
+        0 0 16px rgba(255,255,255,0.07),
+        0 8px 20px rgba(0,0,0,0.7);
+    }
+
+    /* ── 탭 템포 버튼 ── */
+    .tap-btn {
+      padding: 10px 26px;
+      border: 1px solid #3a3a3a;
+      border-top: 1px solid #555;
+      background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+      color: #888;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 2px;
+      transition: all 0.1s;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.5);
+    }
+
+    .tap-btn:hover { border-color: #666; color: #ccc; }
+    .tap-btn:active {
+      background: linear-gradient(180deg, #111 0%, #1a1a1a 100%);
+      transform: scale(0.97);
+    }
+
+    .row { display: flex; align-items: center; gap: 16px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Tempo for you</h1>
+
+  <!-- 박자 표시 -->
+  <div class="beats" id="beats"></div>
+
+  <!-- 도형 반짝이 무대 -->
+  <div class="shape-stage" id="shapeStage"></div>
+
+  <!-- BPM 숫자 -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+    <div class="bpm-display">
+      <button class="bpm-btn" id="bpmDown">−</button>
+      <div>
+        <div class="bpm-number" id="bpmNum">120</div>
+        <div class="bpm-label">BPM</div>
+      </div>
+      <button class="bpm-btn" id="bpmUp">+</button>
+    </div>
+  </div>
+
+  <!-- 슬라이더 -->
+  <div class="slider-wrap">
+    <input type="range" id="bpmSlider" min="20" max="280" value="120" />
+    <div class="slider-labels"><span>20</span><span>Largo</span><span>Andante</span><span>Allegro</span><span>280</span></div>
+  </div>
+
+  <!-- 박자표 선택 -->
+  <div class="time-sig" id="timeSig">
+    <button class="sig-btn" data-beats="2">2/4</button>
+    <button class="sig-btn" data-beats="3">3/4</button>
+    <button class="sig-btn" data-beats="4">4/4</button>
+    <button class="sig-btn" data-beats="6">6/8</button>
+  </div>
+
+  <!-- 시작/정지 + 탭 템포 -->
+  <div class="row">
+    <button class="tap-btn" id="tapBtn">탭 템포</button>
+    <button class="start-btn" id="startBtn">▶</button>
+  </div>
+</div>
+
+<script>
+  // ── 상태 ──────────────────────────────────────────────
+  let bpm = 120;
+  let beatsPerMeasure = 4;
+  let running = false;
+  let currentBeat = 0;
+  let intervalId = null;
+  let audioCtx = null;
+  let tapTimes = [];
+
+  // ── DOM 참조 ──────────────────────────────────────────
+  const bpmNumEl   = document.getElementById('bpmNum');
+  const bpmSlider  = document.getElementById('bpmSlider');
+  const beatsEl    = document.getElementById('beats');
+  const shapeStage = document.getElementById('shapeStage');
+  const startBtn   = document.getElementById('startBtn');
+  const tapBtn     = document.getElementById('tapBtn');
+  const sigBtns    = document.querySelectorAll('.sig-btn');
+
+  // ── 도형 목록 ─────────────────────────────────────────
+  const SHAPES = ['★', '◆', '▲', '■', '●', '✦', '⬟', '⬡', '✸', '⬢'];
+  const ACCENT_COLORS = ['#ffffff', '#e8e8ff', '#ffe8e8', '#e8ffe8', '#fff8e8'];
+  const NORMAL_COLORS = ['#aaaaaa', '#8888cc', '#cc8888', '#88cc88', '#cccc88'];
+
+  function spawnShapes(accent) {
+    const count = accent ? 6 : 3;
+    const colors = accent ? ACCENT_COLORS : NORMAL_COLORS;
+    const stageW = shapeStage.offsetWidth;
+    const stageH = shapeStage.offsetHeight;
+
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('div');
+      el.className = 'shape-particle';
+      el.textContent = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+      el.style.color = colors[Math.floor(Math.random() * colors.length)];
+      el.style.fontSize = (accent ? (1.4 + Math.random() * 1.4) : (0.8 + Math.random() * 1.0)) + 'rem';
+      el.style.left = (Math.random() * (stageW - 40) + 10) + 'px';
+      el.style.top  = (Math.random() * (stageH - 40) + 10) + 'px';
+      el.style.animationDelay = (i * 0.04) + 's';
+      shapeStage.appendChild(el);
+      el.addEventListener('animationend', () => el.remove());
+    }
+  }
+
+  // ── Web Audio 초기화 ──────────────────────────────────
+  function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function playClick(accent) {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.frequency.value = accent ? 1200 : 800;
+    gain.gain.setValueAtTime(accent ? 0.9 : 0.6, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.1);
+  }
+
+  // ── 박자 도트 생성 ────────────────────────────────────
+  function buildBeats() {
+    beatsEl.innerHTML = '';
+    for (let i = 0; i < beatsPerMeasure; i++) {
+      const d = document.createElement('div');
+      d.className = 'beat-dot' + (i === 0 ? ' accent' : '');
+      beatsEl.appendChild(d);
+    }
+  }
+
+  function highlightBeat(idx) {
+    beatsEl.querySelectorAll('.beat-dot').forEach((d, i) =>
+      d.classList.toggle('active', i === idx));
+  }
+
+  // ── 슬라이더 그라디언트 업데이트 ─────────────────────
+  function updateSliderStyle() {
+    const min = +bpmSlider.min, max = +bpmSlider.max;
+    const pct = ((bpm - min) / (max - min) * 100).toFixed(1) + '%';
+    bpmSlider.style.setProperty('--pct', pct);
+  }
+
+  // ── BPM 설정 ──────────────────────────────────────────
+  function setBpm(val) {
+    bpm = Math.min(280, Math.max(20, val));
+    bpmNumEl.textContent = bpm;
+    bpmSlider.value = bpm;
+    updateSliderStyle();
+    if (running) restart();
+  }
+
+  // ── 메트로놈 틱 ───────────────────────────────────────
+  function tick() {
+    const isAccent = currentBeat === 0;
+    playClick(isAccent);
+    highlightBeat(currentBeat);
+    spawnShapes(isAccent);
+    currentBeat = (currentBeat + 1) % beatsPerMeasure;
+  }
+
+  function start() {
+    currentBeat = 0;
+    tick();
+    intervalId = setInterval(tick, 60000 / bpm);
+    running = true;
+    startBtn.textContent = '■';
+    startBtn.classList.add('running');
+  }
+
+  function stop() {
+    clearInterval(intervalId);
+    highlightBeat(-1);
+    // 남은 파티클 제거
+    shapeStage.innerHTML = '';
+    running = false;
+    startBtn.textContent = '▶';
+    startBtn.classList.remove('running');
+  }
+
+  function restart() {
+    if (running) { stop(); start(); }
+  }
+
+  // ── 이벤트 ────────────────────────────────────────────
+  startBtn.addEventListener('click', () => {
+    getAudioCtx().resume();
+    running ? stop() : start();
+  });
+
+  document.getElementById('bpmUp').addEventListener('click', () => setBpm(bpm + 1));
+  document.getElementById('bpmDown').addEventListener('click', () => setBpm(bpm - 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); startBtn.click(); }
+    if (e.code === 'ArrowRight') setBpm(bpm + 1);
+    if (e.code === 'ArrowLeft')  setBpm(bpm - 1);
+    if (e.code === 'ArrowUp')    setBpm(bpm + 5);
+    if (e.code === 'ArrowDown')  setBpm(bpm - 5);
+    if (e.code === 'KeyT') tapBtn.click();
+  });
+
+  bpmSlider.addEventListener('input', () => setBpm(+bpmSlider.value));
+
+  sigBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      sigBtns.forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      beatsPerMeasure = +btn.dataset.beats;
+      currentBeat = 0;
+      buildBeats();
+      if (running) restart();
+    });
+  });
+
+  tapBtn.addEventListener('click', () => {
+    const now = Date.now();
+    tapTimes = tapTimes.filter(t => now - t < 3000);
+    tapTimes.push(now);
+    if (tapTimes.length >= 2) {
+      const intervals = [];
+      for (let i = 1; i < tapTimes.length; i++)
+        intervals.push(tapTimes[i] - tapTimes[i-1]);
+      const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      setBpm(Math.round(60000 / avg));
+    }
+  });
+
+  // ── 초기화 ────────────────────────────────────────────
+  buildBeats();
+  sigBtns.forEach(b => b.classList.toggle('selected', +b.dataset.beats === 4));
+  setBpm(120);
+</script>
+</body>
+</html>
