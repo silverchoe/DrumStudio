@@ -2,13 +2,22 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 const BEATS_PER_MEASURE = 4;
 
-// 마이크 감도 기본값 (0~100, 높을수록 민감)
+// 서브디비전: 1박당 몇 개의 클릭
+const SUBDIVISIONS = [
+  { id: '4beat',   label: '4비트',   sub: 1 },
+  { id: '8beat',   label: '8비트',   sub: 2 },
+  { id: '16beat',  label: '16비트',  sub: 4 },
+  { id: 'triplet', label: '3연음',   sub: 3 },
+];
+
 const DEFAULT_SENSITIVITY = 50;
 
 export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
   const [bpm, setBpm] = useState(100);
   const [playing, setPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
+  const [currentSubBeat, setCurrentSubBeat] = useState(-1);
+  const [subdivision, setSubdivision] = useState(1); // 1=4비트, 2=8비트, 4=16비트, 3=3연음
   const [feedback, setFeedback] = useState(null);
 
   // Mic state
@@ -192,41 +201,73 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
   }, [micReady, analyzeLoop]);
 
   // ── 메트로놈 클릭 소리 ──
-  const playClick = useCallback((accent, time) => {
+  // type: 'accent' (강박), 'beat' (약박), 'sub' (서브디비전)
+  const playClick = useCallback((type, time) => {
     const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.value = accent ? 1200 : 800;
-    gain.gain.setValueAtTime(accent ? 0.8 : 0.5, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+
+    if (type === 'accent') {
+      osc.frequency.value = 1200;
+      gain.gain.setValueAtTime(0.8, time);
+    } else if (type === 'beat') {
+      osc.frequency.value = 800;
+      gain.gain.setValueAtTime(0.5, time);
+    } else {
+      // sub: 더 높고 작은 소리
+      osc.frequency.value = 1600;
+      gain.gain.setValueAtTime(0.25, time);
+    }
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
     osc.start(time);
-    osc.stop(time + 0.1);
+    osc.stop(time + 0.08);
   }, [getAudioCtx]);
 
-  // ── 비트 스케줄러 ──
+  // ── 비트 스케줄러 (서브디비전 포함) ──
+  const subdivisionRef = useRef(subdivision);
+  useEffect(() => { subdivisionRef.current = subdivision; }, [subdivision]);
+
   const scheduleBeats = useCallback(() => {
     const ctx = getAudioCtx();
     const scheduleAhead = 0.1;
+    const sub = subdivisionRef.current;
+    // 전체 틱 수: 4박 × subdivision
+    const totalTicks = BEATS_PER_MEASURE * sub;
+    // 각 서브틱 간격
+    const subInterval = 60.0 / bpm / sub;
 
     while (nextBeatTimeRef.current < ctx.currentTime + scheduleAhead) {
-      const beatIdx = beatIndexRef.current % BEATS_PER_MEASURE;
-      const isAccent = beatIdx === 0;
+      const tickIdx = beatIndexRef.current % totalTicks;
+      const mainBeat = Math.floor(tickIdx / sub);
+      const subBeat = tickIdx % sub;
 
-      playClick(isAccent, nextBeatTimeRef.current);
+      const isAccent = tickIdx === 0;
+      const isMainBeat = subBeat === 0;
 
+      if (isAccent) {
+        playClick('accent', nextBeatTimeRef.current);
+      } else if (isMainBeat) {
+        playClick('beat', nextBeatTimeRef.current);
+      } else {
+        playClick('sub', nextBeatTimeRef.current);
+      }
+
+      // 정확도 측정용: 모든 틱 저장
       lastTickTimesRef.current.push({
         time: nextBeatTimeRef.current,
-        beat: beatIdx,
+        beat: mainBeat,
+        sub: subBeat,
       });
-      if (lastTickTimesRef.current.length > 8) {
+      if (lastTickTimesRef.current.length > 32) {
         lastTickTimesRef.current.shift();
       }
 
-      setCurrentBeat(beatIdx);
+      setCurrentBeat(mainBeat);
+      setCurrentSubBeat(subBeat);
       beatIndexRef.current++;
-      nextBeatTimeRef.current += 60.0 / bpm;
+      nextBeatTimeRef.current += subInterval;
     }
   }, [bpm, playClick, getAudioCtx]);
 
@@ -315,7 +356,7 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
     : '';
 
   // 볼륨 바 색상
-  const volColor = volume > 70 ? '#E53935' : volume > 40 ? '#FDD835' : '#43A047';
+  const volColor = volume > 70 ? '#43A047' : volume > 40 ? '#1E88E5' : '#90CAF9';
 
   return (
     <div className="metronome-section">
@@ -355,18 +396,44 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
         </div>
       </div>
 
-      {/* Beat Indicators + Timer */}
+      {/* Beat Indicators + Subdivision + Timer */}
       <div className="card">
+        {/* 서브디비전 선택 버튼 */}
+        <div className="subdiv-row">
+          {SUBDIVISIONS.map(s => (
+            <button
+              key={s.id}
+              className={'subdiv-btn' + (subdivision === s.sub ? ' active' : '')}
+              onClick={() => setSubdivision(s.sub)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 비트 인디케이터 (서브디비전 포함) */}
         <div className="beat-indicators">
-          {Array.from({ length: BEATS_PER_MEASURE }).map((_, i) => (
-            <div
-              key={i}
-              className={
-                'beat-ind' +
-                (i === currentBeat ? ' active' : '') +
-                (i === 0 ? ' accent' : '')
-              }
-            />
+          {Array.from({ length: BEATS_PER_MEASURE }).map((_, beatIdx) => (
+            <div key={beatIdx} className="beat-group">
+              {Array.from({ length: subdivision }).map((_, subIdx) => {
+                const isActive =
+                  currentBeat === beatIdx && currentSubBeat === subIdx;
+                const isMainBeat = subIdx === 0;
+                const isAccent = beatIdx === 0 && subIdx === 0;
+
+                return (
+                  <div
+                    key={subIdx}
+                    className={
+                      'beat-ind' +
+                      (isMainBeat ? ' main' : ' sub') +
+                      (isAccent ? ' accent' : '') +
+                      (isActive ? ' active' : '')
+                    }
+                  />
+                );
+              })}
+            </div>
           ))}
         </div>
 
@@ -393,12 +460,9 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
         <div className="mic-status-area">
           {!micReady ? (
             <div className="mic-off-box">
-              <div style={{ fontSize: 36, marginBottom: 8 }}>🎙️</div>
-              <div style={{ fontSize: 8, color: '#888', marginBottom: 12, lineHeight: 2 }}>
-                마이크를 켜고 드럼 소리로<br />박자를 맞춰보세요!
-              </div>
-              <button className="pixel-btn blue" onClick={startMic}>
-                🎙️ 마이크 켜기
+              <button className="mic-big-btn pixel-btn blue" onClick={startMic}>
+                <span style={{ fontSize: 32 }}>🎙️</span>
+                <span>마이크 켜기</span>
               </button>
               {micError && (
                 <div style={{ fontSize: 7, color: '#E53935', marginTop: 8, lineHeight: 1.8 }}>
@@ -408,22 +472,6 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
             </div>
           ) : (
             <>
-              {/* 히트 감지 표시 */}
-              <div
-                className="drum-hit-display"
-                style={{
-                  background: hitFlash ? '#FDD835' : '#f5f5f5',
-                  transition: 'background 0.08s',
-                }}
-              >
-                <div style={{ fontSize: 40 }}>
-                  {hitFlash ? '💥' : '🥁'}
-                </div>
-                <div style={{ fontSize: 8, color: '#666', marginTop: 4 }}>
-                  {playing ? '드럼을 치세요!' : '시작 버튼을 누르세요'}
-                </div>
-              </div>
-
               {/* 피드백 */}
               {feedback && (
                 <div className={`tap-feedback ${feedbackClass}`}>

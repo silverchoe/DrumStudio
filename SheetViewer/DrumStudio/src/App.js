@@ -2,9 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import Welcome from './components/Welcome';
 import Metronome from './components/Metronome';
-import Studio from './components/Studio';
-import Records from './components/Records';
-import Navigation from './components/Navigation';
 
 // ── localStorage helper ──
 function loadData() {
@@ -35,7 +32,6 @@ const DEFAULT_DATA = {
 
 export default function App() {
   const [data, setData] = useState(() => loadData() || { ...DEFAULT_DATA });
-  const [page, setPage] = useState('metronome');
   const [showWelcome, setShowWelcome] = useState(false);
   const [rewardPopup, setRewardPopup] = useState(null);
 
@@ -123,33 +119,6 @@ export default function App() {
     });
   }, [giveSticks]);
 
-  const buyItem = useCallback((item) => {
-    setData(prev => {
-      if (prev.sticks < item.price) return prev;
-      if (prev.ownedItems.includes(item.id)) return prev;
-      return {
-        ...prev,
-        sticks: prev.sticks - item.price,
-        ownedItems: [...prev.ownedItems, item.id],
-      };
-    });
-  }, []);
-
-  const placeItem = useCallback((itemId, x, y) => {
-    setData(prev => {
-      const items = prev.studioItems.filter(i => !(i.x === x && i.y === y));
-      items.push({ id: itemId, x, y });
-      return { ...prev, studioItems: items };
-    });
-  }, []);
-
-  const removeItem = useCallback((x, y) => {
-    setData(prev => ({
-      ...prev,
-      studioItems: prev.studioItems.filter(i => !(i.x === x && i.y === y)),
-    }));
-  }, []);
-
   return (
     <div className="app">
       {showWelcome && <Welcome onClose={handleWelcomeClose} />}
@@ -163,32 +132,14 @@ export default function App() {
 
       <div className="header">
         <h1>🥁 DrumStudio</h1>
-        <div className="stick-display">🥢 {data.sticks}</div>
       </div>
 
       <div className="page-content">
-        {page === 'metronome' && (
-          <Metronome
-            onSaveRecord={addPracticeRecord}
-            onCheckTimeReward={checkTimeReward}
-          />
-        )}
-        {page === 'studio' && (
-          <Studio
-            sticks={data.sticks}
-            ownedItems={data.ownedItems}
-            studioItems={data.studioItems}
-            onBuy={buyItem}
-            onPlace={placeItem}
-            onRemove={removeItem}
-          />
-        )}
-        {page === 'records' && (
-          <Records records={data.practiceRecords} />
-        )}
+        <Metronome
+          onSaveRecord={addPracticeRecord}
+          onCheckTimeReward={checkTimeReward}
+        />
       </div>
-
-      <Navigation current={page} onChange={setPage} />
     </div>
   );
 }
