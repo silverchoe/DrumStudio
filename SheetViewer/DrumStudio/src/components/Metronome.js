@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import html2canvas from 'html2canvas';
 
 const BEATS_PER_MEASURE = 4;
 
@@ -10,7 +11,7 @@ const SUBDIVISIONS = [
   { id: 'triplet', label: '3연음',   sub: 3 },
 ];
 
-const DEFAULT_SENSITIVITY = 50;
+const DEFAULT_SENSITIVITY = 92;
 
 export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
   const [bpm, setBpm] = useState(100);
@@ -48,6 +49,11 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
   const micAnimFrameRef = useRef(null);
   const lastHitTimeRef = useRef(0);
   const playingRef = useRef(false);
+
+  // Capture ref
+  const captureRef = useRef(null);
+  const captureHeaderRef = useRef(null);
+  const captureTimerRef = useRef(null);
 
   // Keep playingRef synced
   useEffect(() => { playingRef.current = playing; }, [playing]);
@@ -107,8 +113,8 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
 
   // ── 드럼 히트 감지 (감도 기반 임계값) ──
   const getThreshold = useCallback(() => {
-    // sensitivity 0~100 → threshold 200~30 (민감할수록 낮은 임계값)
-    return 200 - (sensitivity * 1.7);
+    // sensitivity 0~100 → threshold 82~10 (민감할수록 낮은 임계값)
+    return 90 - (sensitivity * 0.8);
   }, [sensitivity]);
 
   // ── 히트 처리 (정확도 계산) ──
@@ -173,8 +179,8 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
         if (deviation > maxDeviation) maxDeviation = deviation;
       }
 
-      // 볼륨 0~100 스케일
-      const normalizedVol = Math.min(100, Math.round((maxDeviation / 128) * 100));
+      // 볼륨 0~100 스케일 (세제곱근으로 작은 소리도 크게 표시)
+      const normalizedVol = Math.min(100, Math.round(Math.cbrt(maxDeviation / 128) * 100));
       setVolume(normalizedVol);
 
       // 히트 감지: 임계값 초과
@@ -277,6 +283,12 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
       await startMic();
     }
 
+    // 상태 먼저 리셋
+    setElapsed(0);
+    setTaps([]);
+    setTotalTaps(0);
+    setFeedback(null);
+
     const ctx = getAudioCtx();
     await ctx.resume();
     beatIndexRef.current = 0;
@@ -293,9 +305,6 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
     }, 1000);
 
     setPlaying(true);
-    setTaps([]);
-    setTotalTaps(0);
-    setFeedback(null);
   }, [micReady, startMic, getAudioCtx, scheduleBeats, onCheckTimeReward]);
 
   // ── 정지 ──
@@ -317,7 +326,6 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
 
     setPlaying(false);
     setCurrentBeat(-1);
-    setElapsed(0);
   }, [elapsed, taps, totalTaps, bpm, onSaveRecord]);
 
   // Cleanup
@@ -341,6 +349,20 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
   const accuracy = taps.length > 0
     ? Math.round(taps.reduce((a, b) => a + b, 0) / taps.length)
     : 0;
+
+  const handleCapture = useCallback(async () => {
+    if (!captureRef.current) return;
+    if (captureHeaderRef.current) captureHeaderRef.current.style.display = 'block';
+    if (captureTimerRef.current) captureTimerRef.current.style.display = 'block';
+    const canvas = await html2canvas(captureRef.current, { backgroundColor: '#ffffff', scale: 4 });
+    if (captureHeaderRef.current) captureHeaderRef.current.style.display = 'none';
+    if (captureTimerRef.current) captureTimerRef.current.style.display = 'none';
+    const fileName = `drumstudio_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}`;
+    const link = document.createElement('a');
+    link.download = `${fileName}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }, []);
 
   const formatTime = (s) => {
     const m = Math.floor(s / 60);
@@ -437,8 +459,8 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
           ))}
         </div>
 
-        <div className="timer-display">
-          ⏱ {formatTime(elapsed)}
+        <div className="timer-display" style={{ textAlign: 'center' }}>
+          {formatTime(elapsed)}
         </div>
 
         <div className="controls-row">
@@ -501,7 +523,7 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
                   type="range"
                   className="bpm-slider"
                   min="10"
-                  max="90"
+                  max="95"
                   value={sensitivity}
                   onChange={e => setSensitivity(+e.target.value)}
                   style={{ height: 8 }}
@@ -527,19 +549,33 @@ export default function Metronome({ onSaveRecord, onCheckTimeReward }) {
         </div>
 
         {/* Stats */}
-        <div className="stats-row" style={{ marginTop: 12 }}>
-          <div className="stat-box">
-            <div className="stat-val">{accuracy}%</div>
-            <div className="stat-label">정확도</div>
+        <div ref={captureRef}>
+          <div ref={captureHeaderRef} style={{ display: 'none', textAlign: 'center', fontFamily: "'Press Start 2P', monospace" }}>
+            <div style={{ fontSize: 32, marginBottom: 8, color: '#43A047', textShadow: '1px 1px 0 #1B5E20' }}>★★★</div>
+            <div style={{ fontSize: 15, marginBottom: 8, color: '#1E88E5', textShadow: '0.5px 0.5px 0 #0D47A1' }}>당신은 드럼의 신</div>
           </div>
-          <div className="stat-box">
-            <div className="stat-val">{totalTaps}</div>
-            <div className="stat-label">히트 수</div>
+          <div ref={captureTimerRef} style={{ display: 'none', textAlign: 'center', fontFamily: "'Press Start 2P', monospace", fontSize: 13, color: '#333', marginBottom: 8 }}>
+            {formatTime(elapsed)}
           </div>
-          <div className="stat-box">
-            <div className="stat-val">{bpm}</div>
-            <div className="stat-label">BPM</div>
+          <div className="stats-row" style={{ marginTop: 4 }}>
+            <div className="stat-box">
+              <div className="stat-val">{accuracy}%</div>
+              <div className="stat-label">정확도</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-val">{totalTaps}</div>
+              <div className="stat-label">히트 수</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-val">{bpm}</div>
+              <div className="stat-label">BPM</div>
+            </div>
           </div>
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 8 }}>
+          <button className="pixel-btn green" onClick={handleCapture} style={{ fontSize: 10, padding: '8px 20px', boxShadow: 'none', textShadow: '1px 1px 0 #1B5E20' }}>
+            📸 결과 캡처하기
+          </button>
         </div>
       </div>
     </div>
