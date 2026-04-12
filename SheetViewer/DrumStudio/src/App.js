@@ -44,8 +44,6 @@ export default function App() {
     if (data.isFirstVisit) {
       setShowWelcome(true);
     } else if (data.lastLoginDate !== today) {
-      // daily login reward
-      giveSticks(1, '매일 접속 보상!');
       setData(prev => ({ ...prev, lastLoginDate: today }));
     }
   }, []); // eslint-disable-line
