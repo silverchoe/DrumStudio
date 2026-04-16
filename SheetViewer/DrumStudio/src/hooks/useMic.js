@@ -8,7 +8,6 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
   const [sensitivity, setSensitivity] = useState(DEFAULT_SENSITIVITY);
   const [volume, setVolume] = useState(0);
   const [taps, setTaps] = useState([]);
-  const [totalTaps, setTotalTaps] = useState(0);
   const [feedback, setFeedback] = useState(null);
 
   const micStreamRef = useRef(null);
@@ -104,7 +103,6 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
     }
 
     setTaps(prev => [...prev, score]);
-    setTotalTaps(prev => prev + 1);
     setFeedback({ label, score });
 
     setTimeout(() => setFeedback(null), 400);
@@ -161,19 +159,20 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
 
   const resetAccuracy = useCallback(() => {
     setTaps([]);
-    setTotalTaps(0);
     setFeedback(null);
   }, []);
 
-  const accuracy = taps.length > 0
-    ? Math.round(taps.reduce((a, b) => a + b, 0) / taps.length)
+  const totalTaps = taps.length;
+  const accuracy = totalTaps > 0
+    ? Math.round(taps.reduce((a, b) => a + b, 0) / totalTaps)
     : 0;
 
   return {
     micReady, micError,
     sensitivity, setSensitivity,
     volume,
-    taps, totalTaps, feedback, accuracy,
+    totalTaps, feedback, accuracy,
     startMic, stopMic, resetAccuracy,
   };
+
 }

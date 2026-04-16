@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import Welcome from './components/Welcome';
 import Metronome from './components/Metronome';
@@ -23,7 +23,6 @@ function todayStr() {
 const DEFAULT_DATA = {
   isFirstVisit: true,
   lastLoginDate: '',
-  practiceRecords: [],
 };
 
 export default function App() {
@@ -53,23 +52,6 @@ export default function App() {
     setShowWelcome(false);
   };
 
-  const addPracticeRecord = useCallback((record) => {
-    const today = todayStr();
-    setData(prev => {
-      const records = [...prev.practiceRecords];
-      const dayIdx = records.findIndex(r => r.date === today);
-      if (dayIdx >= 0) {
-        records[dayIdx] = {
-          ...records[dayIdx],
-          sessions: [...records[dayIdx].sessions, record],
-        };
-      } else {
-        records.push({ date: today, sessions: [record] });
-      }
-      return { ...prev, practiceRecords: records };
-    });
-  }, []);
-
   return (
     <div className="app">
       {showWelcome && <Welcome onClose={handleWelcomeClose} />}
@@ -79,7 +61,7 @@ export default function App() {
       </div>
 
       <div className="page-content">
-        <Metronome onSaveRecord={addPracticeRecord} />
+        <Metronome />
       </div>
     </div>
   );

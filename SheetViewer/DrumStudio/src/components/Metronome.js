@@ -2,17 +2,9 @@ import React, { useRef, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import { useMetronome } from '../hooks/useMetronome';
 import { useMic } from '../hooks/useMic';
+import { BEATS_PER_MEASURE, SUBDIVISIONS } from '../constants';
 
-const BEATS_PER_MEASURE = 4;
-
-const SUBDIVISIONS = [
-  { id: '4beat',   label: '4비트',   sub: 1 },
-  { id: '8beat',   label: '8비트',   sub: 2 },
-  { id: '16beat',  label: '16비트',  sub: 4 },
-  { id: 'triplet', label: '3연음',   sub: 3 },
-];
-
-export default function Metronome({ onSaveRecord }) {
+export default function Metronome() {
   const metronome = useMetronome();
   const mic = useMic({
     audioCtxRef: metronome.audioCtxRef,
@@ -36,15 +28,7 @@ export default function Metronome({ onSaveRecord }) {
 
   const stop = useCallback(() => {
     metronome.stopScheduler();
-    if (metronome.elapsed > 0 && mic.totalTaps > 0) {
-      onSaveRecord({
-        bpm: metronome.bpm,
-        duration: metronome.elapsed,
-        accuracy: mic.accuracy,
-        taps: mic.totalTaps,
-      });
-    }
-  }, [metronome, mic, onSaveRecord]);
+  }, [metronome]);
 
   const handleCapture = useCallback(async () => {
     if (!captureRef.current) return;

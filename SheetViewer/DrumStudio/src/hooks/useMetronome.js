@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-
-const BEATS_PER_MEASURE = 4;
+import { BEATS_PER_MEASURE } from '../constants';
 
 export function useMetronome() {
   const [bpm, setBpm] = useState(100);
@@ -57,6 +56,9 @@ export function useMetronome() {
     const totalTicks = BEATS_PER_MEASURE * sub;
     const subInterval = 60.0 / bpm / sub;
 
+    let lastMainBeat = -1;
+    let lastSubBeat = -1;
+
     while (nextBeatTimeRef.current < ctx.currentTime + scheduleAhead) {
       const tickIdx = beatIndexRef.current % totalTicks;
       const mainBeat = Math.floor(tickIdx / sub);
@@ -82,10 +84,15 @@ export function useMetronome() {
         lastTickTimesRef.current.shift();
       }
 
-      setCurrentBeat(mainBeat);
-      setCurrentSubBeat(subBeat);
+      lastMainBeat = mainBeat;
+      lastSubBeat = subBeat;
       beatIndexRef.current++;
       nextBeatTimeRef.current += subInterval;
+    }
+
+    if (lastMainBeat >= 0) {
+      setCurrentBeat(lastMainBeat);
+      setCurrentSubBeat(lastSubBeat);
     }
   }, [bpm, playClick, getAudioCtx]);
 
