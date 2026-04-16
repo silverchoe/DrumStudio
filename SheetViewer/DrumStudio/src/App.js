@@ -21,19 +21,14 @@ function todayStr() {
 }
 
 const DEFAULT_DATA = {
-  sticks: 0,
   isFirstVisit: true,
   lastLoginDate: '',
   practiceRecords: [],
-  studioItems: [],
-  ownedItems: [],
-  rewardsGiven: {},
 };
 
 export default function App() {
   const [data, setData] = useState(() => loadData() || { ...DEFAULT_DATA });
   const [showWelcome, setShowWelcome] = useState(false);
-  const [rewardPopup, setRewardPopup] = useState(null);
 
   // persist
   useEffect(() => { saveData(data); }, [data]);
@@ -48,19 +43,12 @@ export default function App() {
     }
   }, []); // eslint-disable-line
 
-  const giveSticks = useCallback((amount, message) => {
-    setData(prev => ({ ...prev, sticks: prev.sticks + amount }));
-    setRewardPopup({ amount, message });
-    setTimeout(() => setRewardPopup(null), 2500);
-  }, []);
-
   const handleWelcomeClose = () => {
     const today = todayStr();
     setData(prev => ({
       ...prev,
       isFirstVisit: false,
       lastLoginDate: today,
-      sticks: prev.sticks + 1,
     }));
     setShowWelcome(false);
   };
@@ -82,61 +70,16 @@ export default function App() {
     });
   }, []);
 
-  const checkTimeReward = useCallback((totalSeconds) => {
-    const today = todayStr();
-    setData(prev => {
-      const rewards = { ...prev.rewardsGiven };
-      const todayRewards = rewards[today] || { min10: false, min30: false, hour1: false };
-      let sticksToGive = 0;
-      let msg = '';
-
-      if (totalSeconds >= 600 && !todayRewards.min10) {
-        todayRewards.min10 = true;
-        sticksToGive = 2;
-        msg = '10분 연습 완료!';
-      }
-      if (totalSeconds >= 1800 && !todayRewards.min30) {
-        todayRewards.min30 = true;
-        sticksToGive = 5;
-        msg = '30분 연습 완료!';
-      }
-      if (totalSeconds >= 3600 && !todayRewards.hour1) {
-        todayRewards.hour1 = true;
-        sticksToGive = 10;
-        msg = '1시간 연습 완료!';
-      }
-
-      if (sticksToGive > 0) {
-        rewards[today] = todayRewards;
-        setTimeout(() => giveSticks(sticksToGive, msg), 300);
-        return { ...prev, rewardsGiven: rewards };
-      }
-
-      rewards[today] = todayRewards;
-      return { ...prev, rewardsGiven: rewards };
-    });
-  }, [giveSticks]);
-
   return (
     <div className="app">
       {showWelcome && <Welcome onClose={handleWelcomeClose} />}
-
-      {rewardPopup && (
-        <div className="reward-popup">
-          <div>{rewardPopup.message}</div>
-          <div className="reward-sticks">+{rewardPopup.amount} 🥢</div>
-        </div>
-      )}
 
       <div className="header">
         <h1>🥁 DrumStudio</h1>
       </div>
 
       <div className="page-content">
-        <Metronome
-          onSaveRecord={addPracticeRecord}
-          onCheckTimeReward={checkTimeReward}
-        />
+        <Metronome onSaveRecord={addPracticeRecord} />
       </div>
     </div>
   );
