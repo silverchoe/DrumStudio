@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import Welcome from './components/Welcome';
+import Tutorial from './components/Tutorial';
 import Metronome from './components/Metronome';
 
 // ── localStorage helper ──
@@ -28,6 +29,7 @@ const DEFAULT_DATA = {
 export default function App() {
   const [data, setData] = useState(() => loadData() || { ...DEFAULT_DATA });
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   // persist
   useEffect(() => { saveData(data); }, [data]);
@@ -50,14 +52,23 @@ export default function App() {
       lastLoginDate: today,
     }));
     setShowWelcome(false);
+    setShowTutorial(true);
+  };
+
+  const handleTutorialClose = () => {
+    setShowTutorial(false);
   };
 
   return (
     <div className="app">
       {showWelcome && <Welcome onClose={handleWelcomeClose} />}
+      {showTutorial && <Tutorial onClose={handleTutorialClose} />}
 
       <div className="header">
-        <h1>🥁 DrumStudio</h1>
+        <h1>
+          <span className="header-icon">🥁</span>
+          <span className="header-text">DrumStudio</span>
+        </h1>
       </div>
 
       <div className="page-content">

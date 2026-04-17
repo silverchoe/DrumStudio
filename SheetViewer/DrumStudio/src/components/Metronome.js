@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { useMetronome } from '../hooks/useMetronome';
 import { useMic } from '../hooks/useMic';
@@ -13,10 +13,8 @@ export default function Metronome() {
     playing: metronome.playing,
   });
 
-  // Capture refs
   const captureRef = useRef(null);
-  const captureHeaderRef = useRef(null);
-  const captureTimerRef = useRef(null);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   const start = useCallback(async () => {
     if (!mic.micReady) {
@@ -32,22 +30,31 @@ export default function Metronome() {
 
   const handleCapture = useCallback(async () => {
     if (!captureRef.current) return;
-    if (captureHeaderRef.current) captureHeaderRef.current.style.display = 'block';
-    if (captureTimerRef.current) captureTimerRef.current.style.display = 'block';
-    const canvas = await html2canvas(captureRef.current, { backgroundColor: '#ffffff', scale: 4 });
-    if (captureHeaderRef.current) captureHeaderRef.current.style.display = 'none';
-    if (captureTimerRef.current) captureTimerRef.current.style.display = 'none';
-    const fileName = `drumstudio_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}`;
-    const link = document.createElement('a');
-    link.download = `${fileName}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    setIsCapturing(true);
+    await new Promise(r => requestAnimationFrame(r));
+    try {
+      const canvas = await html2canvas(captureRef.current, { backgroundColor: '#ffffff', scale: 4 });
+      const fileName = `drumstudio_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
+      const link = document.createElement('a');
+      link.download = `${fileName}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } finally {
+      setIsCapturing(false);
+    }
   }, []);
 
   const formatTime = (s) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  };
+
+  const getRank = (acc) => {
+    if (acc >= 80) return { stars: '★★★', title: '당신은 드럼의 신' };
+    if (acc >= 50) return { stars: '★★', title: '당신은 이미 드러머' };
+    if (acc >= 30) return { stars: '★', title: '할 수 있다. 해보자.' };
+    return { stars: '', title: '마이크 체크해 보세요.' };
   };
 
   const feedbackClass = mic.feedback
@@ -58,6 +65,7 @@ export default function Metronome() {
     : '';
 
   const volColor = mic.volume > 70 ? '#43A047' : mic.volume > 40 ? '#1E88E5' : '#90CAF9';
+  const rank = getRank(mic.accuracy);
 
   return (
     <div className="metronome-section">
@@ -158,13 +166,11 @@ export default function Metronome() {
           {!mic.micReady ? (
             <div className="mic-off-box">
               <button className="mic-big-btn pixel-btn blue" onClick={mic.startMic}>
-                <span style={{ fontSize: 32 }}>🎙️</span>
+                <span className="mic-big-icon">🎙️</span>
                 <span>마이크 켜기</span>
               </button>
               {mic.micError && (
-                <div style={{ fontSize: 7, color: '#E53935', marginTop: 8, lineHeight: 1.8 }}>
-                  {mic.micError}
-                </div>
+                <div className="mic-error">{mic.micError}</div>
               )}
             </div>
           ) : (
@@ -203,12 +209,8 @@ export default function Metronome() {
                 </div>
               </div>
 
-              <div style={{ textAlign: 'center', marginTop: 8 }}>
-                <button
-                  className="pixel-btn gray"
-                  onClick={mic.stopMic}
-                  style={{ fontSize: 7, padding: '6px 12px' }}
-                >
+              <div className="mic-off-wrap">
+                <button className="pixel-btn gray mic-off-btn" onClick={mic.stopMic}>
                   🎙️ 마이크 끄기
                 </button>
               </div>
@@ -218,14 +220,16 @@ export default function Metronome() {
 
         {/* Stats (캡처 영역) */}
         <div ref={captureRef}>
-          <div ref={captureHeaderRef} style={{ display: 'none', textAlign: 'center', fontFamily: "'Press Start 2P', monospace" }}>
-            <div style={{ fontSize: 32, marginBottom: 8, color: '#43A047', textShadow: '1px 1px 0 #1B5E20' }}>★★★</div>
-            <div style={{ fontSize: 15, marginBottom: 8, color: '#1E88E5', textShadow: '0.5px 0.5px 0 #0D47A1' }}>당신은 드럼의 신</div>
-          </div>
-          <div ref={captureTimerRef} style={{ display: 'none', textAlign: 'center', fontFamily: "'Press Start 2P', monospace", fontSize: 13, color: '#333', marginBottom: 8 }}>
-            {formatTime(metronome.elapsed)}
-          </div>
-          <div className="stats-row" style={{ marginTop: 4 }}>
+          {isCapturing && (
+            <>
+              <div className="capture-header">
+                {rank.stars && <div className="capture-stars">{rank.stars}</div>}
+                <div className="capture-title">{rank.title}</div>
+              </div>
+              <div className="capture-timer">{formatTime(metronome.elapsed)}</div>
+            </>
+          )}
+          <div className="stats-row stats-row-spaced">
             <div className="stat-box">
               <div className="stat-val">{mic.accuracy}%</div>
               <div className="stat-label">정확도</div>
@@ -240,12 +244,8 @@ export default function Metronome() {
             </div>
           </div>
         </div>
-        <div style={{ textAlign: 'center', marginTop: 8 }}>
-          <button
-            className="pixel-btn green"
-            onClick={handleCapture}
-            style={{ fontSize: 10, padding: '8px 20px', boxShadow: 'none', textShadow: '1px 1px 0 #1B5E20' }}
-          >
+        <div className="capture-btn-wrap">
+          <button className="pixel-btn green capture-btn" onClick={handleCapture}>
             📸 결과 캡처하기
           </button>
         </div>

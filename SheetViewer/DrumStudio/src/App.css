@@ -53,6 +53,7 @@ body {
 @media (max-width: 480px) {
   .app { max-width: 100%; }
   .page-content { padding: 8px; }
+  .header { margin: 0 8px 12px; }
 }
 
 /* ── Header bar ── */
@@ -67,13 +68,31 @@ body {
     inset -4px -4px 0 0 #00000022,
     inset 4px 4px 0 0 #ffffff88,
     8px 8px 0 0 #00000022;
-  margin-bottom: 12px;
+  margin: 0 12px 12px;
 }
 
 .header h1 {
   font-size: 12px;
   color: #fff;
   text-shadow: 2px 2px 0 #0D47A1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1;
+}
+
+.header-icon {
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  transform: translateY(-4px);
+}
+
+.header-text {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 /* ── Pixel Button ── */
@@ -148,8 +167,98 @@ body {
   font-size: 24px;
   color: #1E88E5;
   text-shadow: 1px 1px 0 #BDBDBD, 2px 2px 0 #BDBDBD, 3px 3px 0 #BDBDBD;
-  margin-bottom: 28px;
+  margin-bottom: 16px;
   line-height: 1.8;
+}
+
+.welcome-note {
+  font-size: 11px;
+  color: #757575;
+  margin: 0 0 20px;
+  letter-spacing: 0.5px;
+}
+
+/* ═══════════════════════════════════════════════
+   Tutorial Screen
+   ═══════════════════════════════════════════════ */
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 998;
+  animation: fadeIn 0.3s;
+  padding: 16px;
+}
+
+.tutorial-box {
+  background: #fff;
+  border: 6px solid #BDBDBD;
+  padding: 28px 24px;
+  max-width: 460px;
+  width: 100%;
+  text-align: center;
+  box-shadow:
+    inset -4px -4px 0 0 #00000022,
+    inset 4px 4px 0 0 #ffffff88,
+    12px 12px 0 0 #00000033;
+  animation: popIn 0.4s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.tutorial-title {
+  font-size: 20px;
+  color: #1E88E5;
+  text-shadow: 1px 1px 0 #BDBDBD, 2px 2px 0 #BDBDBD;
+  margin: 0 0 24px;
+}
+
+.tutorial-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  text-align: left;
+}
+
+.tutorial-list li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 12px 10px;
+  border: 3px solid #E0E0E0;
+  border-radius: 2px;
+  margin-bottom: 10px;
+  background: #FAFAFA;
+}
+
+.tutorial-list li b {
+  display: block;
+  font-size: 14px;
+  color: #1E88E5;
+  margin-bottom: 6px;
+  text-shadow: 1px 1px 0 #BDBDBD;
+}
+
+.tutorial-list li p {
+  margin: 0;
+  font-size: 14px;
+  color: #424242;
+  line-height: 1.55;
+  font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+}
+
+.tutorial-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.tutorial-skip {
+  margin-top: 4px;
 }
 
 @keyframes bounce {
@@ -520,6 +629,72 @@ body {
   font-size: 6px;
   color: #aaa;
   margin-top: 2px;
+}
+
+/* ── Mic UI ── */
+.mic-big-icon {
+  font-size: 32px;
+}
+
+.mic-error {
+  font-size: 7px;
+  color: #E53935;
+  margin-top: 8px;
+  line-height: 1.8;
+}
+
+.mic-off-wrap {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.mic-off-btn {
+  font-size: 7px;
+  padding: 6px 12px;
+}
+
+/* ── Capture (결과 이미지) ── */
+.capture-header {
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+}
+
+.capture-stars {
+  font-size: 32px;
+  margin-bottom: 8px;
+  color: #43A047;
+  text-shadow: 1px 1px 0 #1B5E20;
+}
+
+.capture-title {
+  font-size: 15px;
+  margin-bottom: 8px;
+  color: #1E88E5;
+  text-shadow: 0.5px 0.5px 0 #0D47A1;
+}
+
+.capture-timer {
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 13px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.stats-row-spaced {
+  margin-top: 4px;
+}
+
+.capture-btn-wrap {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.capture-btn {
+  font-size: 10px;
+  padding: 8px 20px;
+  box-shadow: none;
+  text-shadow: 1px 1px 0 #1B5E20;
 }
 
 /* ── Scrollbar pixel style ── */
