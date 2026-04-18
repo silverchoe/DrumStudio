@@ -9,6 +9,7 @@ export default function Welcome({ onClose }) {
         <button className="pixel-btn green" onClick={onClose}>
           시작하기!
         </button>
+        <p className="welcome-version">v1.0.0</p>
       </div>
     </div>
   );

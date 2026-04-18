@@ -178,6 +178,13 @@ body {
   letter-spacing: 0.5px;
 }
 
+.welcome-version {
+  font-size: 10px;
+  color: #BDBDBD;
+  margin: 16px 0 0;
+  letter-spacing: 1px;
+}
+
 /* ═══════════════════════════════════════════════
    Tutorial Screen
    ═══════════════════════════════════════════════ */
