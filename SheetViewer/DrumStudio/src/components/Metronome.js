@@ -2,12 +2,29 @@ import React, { useRef, useCallback, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { useMetronome } from '../hooks/useMetronome';
 import { useMic } from '../hooks/useMic';
-import { BEATS_PER_MEASURE, SUBDIVISIONS } from '../constants';
+import {
+  BEATS_PER_MEASURE, SUBDIVISIONS,
+  BPM_MIN, BPM_MAX, BPM_STEP,
+  SENSITIVITY_MIN, SENSITIVITY_MAX,
+  RANKS,
+  VOLUME_HIGH, VOLUME_MID,
+  VOLUME_COLOR_HIGH, VOLUME_COLOR_MID, VOLUME_COLOR_LOW,
+} from '../constants';
+
+function getRank(acc) {
+  return RANKS.find(r => acc >= r.minAcc) || RANKS[RANKS.length - 1];
+}
+
+function getVolumeColor(vol) {
+  if (vol > VOLUME_HIGH) return VOLUME_COLOR_HIGH;
+  if (vol > VOLUME_MID) return VOLUME_COLOR_MID;
+  return VOLUME_COLOR_LOW;
+}
 
 export default function Metronome() {
   const metronome = useMetronome();
   const mic = useMic({
-    audioCtxRef: metronome.audioCtxRef,
+    getAudioCtx: metronome.getAudioCtx,
     lastTickTimesRef: metronome.lastTickTimesRef,
     nextBeatTimeRef: metronome.nextBeatTimeRef,
     playing: metronome.playing,
@@ -50,21 +67,8 @@ export default function Metronome() {
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  const getRank = (acc) => {
-    if (acc >= 80) return { stars: '★★★', title: '당신은 드럼의 신' };
-    if (acc >= 50) return { stars: '★★', title: '당신은 이미 드러머' };
-    if (acc >= 30) return { stars: '★', title: '할 수 있다. 해보자.' };
-    return { stars: '', title: '마이크 체크해 보세요.' };
-  };
-
-  const feedbackClass = mic.feedback
-    ? mic.feedback.score >= 100 ? 'perfect'
-    : mic.feedback.score >= 85 ? 'great'
-    : mic.feedback.score >= 60 ? 'good'
-    : 'miss'
-    : '';
-
-  const volColor = mic.volume > 70 ? '#43A047' : mic.volume > 40 ? '#1E88E5' : '#90CAF9';
+  const feedbackClass = mic.feedback?.className || '';
+  const volColor = getVolumeColor(mic.volume);
   const rank = getRank(mic.accuracy);
 
   return (
@@ -74,33 +78,33 @@ export default function Metronome() {
         <div className="bpm-area">
           <button
             className="pixel-btn blue"
-            onClick={() => metronome.setBpm(Math.max(40, metronome.bpm - 5))}
-          >-5</button>
+            onClick={() => metronome.setBpm(Math.max(BPM_MIN, metronome.bpm - BPM_STEP))}
+          >-{BPM_STEP}</button>
           <div>
             <div className="bpm-value">{metronome.bpm}</div>
             <div className="bpm-label">BPM</div>
           </div>
           <button
             className="pixel-btn blue"
-            onClick={() => metronome.setBpm(Math.min(200, metronome.bpm + 5))}
-          >+5</button>
+            onClick={() => metronome.setBpm(Math.min(BPM_MAX, metronome.bpm + BPM_STEP))}
+          >+{BPM_STEP}</button>
         </div>
 
         <div className="bpm-slider-wrap">
           <input
             type="range"
             className="bpm-slider"
-            min="40"
-            max="200"
+            min={BPM_MIN}
+            max={BPM_MAX}
             value={metronome.bpm}
             onChange={e => metronome.setBpm(+e.target.value)}
           />
           <div className="slider-labels">
-            <span>40</span>
+            <span>{BPM_MIN}</span>
             <span>Slow</span>
             <span>Medium</span>
             <span>Fast</span>
-            <span>200</span>
+            <span>{BPM_MAX}</span>
           </div>
         </div>
       </div>
@@ -197,8 +201,8 @@ export default function Metronome() {
                 <input
                   type="range"
                   className="bpm-slider"
-                  min="10"
-                  max="95"
+                  min={SENSITIVITY_MIN}
+                  max={SENSITIVITY_MAX}
                   value={mic.sensitivity}
                   onChange={e => mic.setSensitivity(+e.target.value)}
                   style={{ height: 8 }}

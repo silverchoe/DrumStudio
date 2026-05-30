@@ -1,11 +1,19 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { SENSITIVITY_DEFAULT, JUDGEMENTS, FEEDBACK_DURATION_MS } from '../constants';
 
-const DEFAULT_SENSITIVITY = 92;
+const HIT_COOLDOWN_SEC = 0.10;
 
-export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing }) {
+function judge(ms) {
+  for (const j of JUDGEMENTS) {
+    if (ms < j.maxMs) return j;
+  }
+  return JUDGEMENTS[JUDGEMENTS.length - 1];
+}
+
+export function useMic({ getAudioCtx, lastTickTimesRef, nextBeatTimeRef, playing }) {
   const [micReady, setMicReady] = useState(false);
   const [micError, setMicError] = useState(null);
-  const [sensitivity, setSensitivity] = useState(DEFAULT_SENSITIVITY);
+  const [sensitivity, setSensitivity] = useState(SENSITIVITY_DEFAULT);
   const [volume, setVolume] = useState(0);
   const [taps, setTaps] = useState([]);
   const [feedback, setFeedback] = useState(null);
@@ -15,7 +23,8 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
   const micAnimFrameRef = useRef(null);
   const lastHitTimeRef = useRef(0);
   const playingRef = useRef(false);
-  const sensitivityRef = useRef(DEFAULT_SENSITIVITY);
+  const sensitivityRef = useRef(SENSITIVITY_DEFAULT);
+  const feedbackTimeoutRef = useRef(null);
 
   useEffect(() => { playingRef.current = playing; }, [playing]);
   useEffect(() => { sensitivityRef.current = sensitivity; }, [sensitivity]);
@@ -32,8 +41,7 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
       });
       micStreamRef.current = stream;
 
-      const ctx = audioCtxRef.current || new (window.AudioContext || window.webkitAudioContext)();
-      audioCtxRef.current = ctx;
+      const ctx = getAudioCtx();
       await ctx.resume();
 
       const source = ctx.createMediaStreamSource(stream);
@@ -49,7 +57,7 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
       setMicError('마이크 접근이 거부되었습니다. 브라우저 설정에서 허용해주세요.');
       setMicReady(false);
     }
-  }, [audioCtxRef]);
+  }, [getAudioCtx]);
 
   const stopMic = useCallback(() => {
     if (micStreamRef.current) {
@@ -65,19 +73,17 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
   }, []);
 
   const getThreshold = useCallback(() => {
-    // sensitivity 0~100 → threshold 82~10 (민감할수록 낮은 임계값)
+    // sensitivity 0~100 → threshold 90~10 (민감할수록 낮은 임계값)
     return 90 - (sensitivityRef.current * 0.8);
   }, []);
 
   const processHit = useCallback(() => {
     if (!playingRef.current) return;
 
-    const ctx = audioCtxRef.current;
-    if (!ctx) return;
+    const ctx = getAudioCtx();
     const now = ctx.currentTime;
 
-    // 쿨다운: 100ms 이내 중복 히트 방지
-    if (now - lastHitTimeRef.current < 0.10) return;
+    if (now - lastHitTimeRef.current < HIT_COOLDOWN_SEC) return;
     lastHitTimeRef.current = now;
 
     // 가장 가까운 비트 찾기
@@ -89,24 +95,17 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
     const nextDiff = Math.abs(nextBeatTimeRef.current - now);
     if (nextDiff < minDiff) minDiff = nextDiff;
 
-    const ms = minDiff * 1000;
-    let score, label;
-
-    if (ms < 40) {
-      score = 100; label = 'PERFECT!';
-    } else if (ms < 80) {
-      score = 85; label = 'GREAT!';
-    } else if (ms < 140) {
-      score = 60; label = 'GOOD';
-    } else {
-      score = 20; label = 'MISS';
-    }
+    const { score, label, className } = judge(minDiff * 1000);
 
     setTaps(prev => [...prev, score]);
-    setFeedback({ label, score });
+    setFeedback({ label, score, className });
 
-    setTimeout(() => setFeedback(null), 400);
-  }, [audioCtxRef, lastTickTimesRef, nextBeatTimeRef]);
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => {
+      setFeedback(null);
+      feedbackTimeoutRef.current = null;
+    }, FEEDBACK_DURATION_MS);
+  }, [getAudioCtx, lastTickTimesRef, nextBeatTimeRef]);
 
   const analyzeLoop = useCallback(() => {
     const analyser = analyserRef.current;
@@ -118,7 +117,6 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
     const loop = () => {
       analyser.getByteTimeDomainData(dataArray);
 
-      // 피크 볼륨 계산 (128이 중심, 편차로 볼륨 측정)
       let maxDeviation = 0;
       for (let i = 0; i < bufferLength; i++) {
         const deviation = Math.abs(dataArray[i] - 128);
@@ -129,7 +127,6 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
       const normalizedVol = Math.min(100, Math.round(Math.cbrt(maxDeviation / 128) * 100));
       setVolume(normalizedVol);
 
-      // 히트 감지: 매 프레임마다 최신 threshold 읽기
       if (maxDeviation > getThreshold()) {
         processHit();
       }
@@ -140,7 +137,6 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
     loop();
   }, [getThreshold, processHit]);
 
-  // analyser가 준비되면 분석 루프 시작
   useEffect(() => {
     if (micReady && analyserRef.current) {
       analyzeLoop();
@@ -152,14 +148,20 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
     };
   }, [micReady, analyzeLoop]);
 
-  // Cleanup
   useEffect(() => {
-    return () => stopMic();
+    return () => {
+      stopMic();
+      if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    };
   }, [stopMic]);
 
   const resetAccuracy = useCallback(() => {
     setTaps([]);
     setFeedback(null);
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current);
+      feedbackTimeoutRef.current = null;
+    }
   }, []);
 
   const totalTaps = taps.length;
@@ -174,5 +176,4 @@ export function useMic({ audioCtxRef, lastTickTimesRef, nextBeatTimeRef, playing
     totalTaps, feedback, accuracy,
     startMic, stopMic, resetAccuracy,
   };
-
 }

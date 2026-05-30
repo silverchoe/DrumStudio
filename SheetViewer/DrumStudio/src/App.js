@@ -4,6 +4,8 @@ import Welcome from './components/Welcome';
 import Tutorial from './components/Tutorial';
 import Metronome from './components/Metronome';
 
+const APP_VERSION = process.env.REACT_APP_VERSION;
+
 // ── localStorage helper ──
 function loadData() {
   try {
@@ -22,7 +24,7 @@ function todayStr() {
 }
 
 const DEFAULT_DATA = {
-  isFirstVisit: true,
+  lastSeenVersion: '',
   lastLoginDate: '',
 };
 
@@ -34,10 +36,10 @@ export default function App() {
   // persist
   useEffect(() => { saveData(data); }, [data]);
 
-  // daily login & first visit
+  // first visit or version change → show welcome/tutorial
   useEffect(() => {
     const today = todayStr();
-    if (data.isFirstVisit) {
+    if (data.lastSeenVersion !== APP_VERSION) {
       setShowWelcome(true);
     } else if (data.lastLoginDate !== today) {
       setData(prev => ({ ...prev, lastLoginDate: today }));
@@ -48,7 +50,7 @@ export default function App() {
     const today = todayStr();
     setData(prev => ({
       ...prev,
-      isFirstVisit: false,
+      lastSeenVersion: APP_VERSION,
       lastLoginDate: today,
     }));
     setShowWelcome(false);
@@ -61,7 +63,7 @@ export default function App() {
 
   return (
     <div className="app">
-      {showWelcome && <Welcome onClose={handleWelcomeClose} />}
+      {showWelcome && <Welcome onClose={handleWelcomeClose} version={APP_VERSION} />}
       {showTutorial && <Tutorial onClose={handleTutorialClose} />}
 
       <div className="header">

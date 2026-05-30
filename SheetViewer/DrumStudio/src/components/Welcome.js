@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Welcome({ onClose }) {
+export default function Welcome({ onClose, version }) {
   return (
     <div className="welcome-overlay" onClick={onClose}>
       <div className="welcome-box" onClick={e => e.stopPropagation()}>
@@ -9,7 +9,7 @@ export default function Welcome({ onClose }) {
         <button className="pixel-btn green" onClick={onClose}>
           시작하기!
         </button>
-        <p className="welcome-version">v1.0.0</p>
+        <p className="welcome-version">v{version}</p>
       </div>
     </div>
   );

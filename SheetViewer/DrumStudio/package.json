@@ -10,8 +10,10 @@
     "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
+    "prestart": "node scripts/sync-tauri-version.js",
+    "prebuild": "node scripts/sync-tauri-version.js",
+    "start": "REACT_APP_VERSION=$npm_package_version react-scripts start",
+    "build": "REACT_APP_VERSION=$npm_package_version react-scripts build"
   },
   "browserslist": {
     "production": [
