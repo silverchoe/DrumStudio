@@ -3,12 +3,15 @@ import { SENSITIVITY_DEFAULT, JUDGEMENTS, FEEDBACK_DURATION_MS } from '../consta
 
 const HIT_COOLDOWN_SEC = 0.10;
 
-function judge(ms) {
-  for (const j of JUDGEMENTS) {
-    if (ms < j.maxMs) return j;
-  }
-  return JUDGEMENTS[JUDGEMENTS.length - 1];
-}
+const MIC_ERROR_MESSAGES = {
+  NotAllowedError: '마이크 접근이 거부되었습니다. 브라우저 설정에서 허용해주세요.',
+  NotFoundError: '마이크 장치를 찾을 수 없습니다.',
+  NotReadableError: '다른 앱이 마이크를 사용 중입니다.',
+  OverconstrainedError: '요청한 마이크 설정을 지원하지 않습니다.',
+  SecurityError: 'HTTPS 또는 localhost에서만 마이크를 사용할 수 있습니다.',
+};
+
+const judge = (ms) => JUDGEMENTS.find(j => ms < j.maxMs);
 
 export function useMic({ getAudioCtx, lastTickTimesRef, nextBeatTimeRef, playing }) {
   const [micReady, setMicReady] = useState(false);
@@ -33,11 +36,7 @@ export function useMic({ getAudioCtx, lastTickTimesRef, nextBeatTimeRef, playing
     try {
       setMicError(null);
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        }
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
       });
       micStreamRef.current = stream;
 
@@ -54,114 +53,86 @@ export function useMic({ getAudioCtx, lastTickTimesRef, nextBeatTimeRef, playing
       setMicReady(true);
     } catch (err) {
       console.error('Mic error:', err);
-      setMicError('마이크 접근이 거부되었습니다. 브라우저 설정에서 허용해주세요.');
+      setMicError(MIC_ERROR_MESSAGES[err.name] || `마이크 오류: ${err.name || err.message}`);
       setMicReady(false);
     }
   }, [getAudioCtx]);
 
   const stopMic = useCallback(() => {
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(t => t.stop());
-      micStreamRef.current = null;
-    }
-    if (micAnimFrameRef.current) {
-      cancelAnimationFrame(micAnimFrameRef.current);
-    }
+    micStreamRef.current?.getTracks().forEach(t => t.stop());
+    micStreamRef.current = null;
+    if (micAnimFrameRef.current) cancelAnimationFrame(micAnimFrameRef.current);
     analyserRef.current = null;
     setMicReady(false);
     setVolume(0);
   }, []);
 
-  const getThreshold = useCallback(() => {
-    // sensitivity 0~100 → threshold 90~10 (민감할수록 낮은 임계값)
-    return 90 - (sensitivityRef.current * 0.8);
-  }, []);
-
   const processHit = useCallback(() => {
     if (!playingRef.current) return;
 
-    const ctx = getAudioCtx();
-    const now = ctx.currentTime;
-
+    const now = getAudioCtx().currentTime;
     if (now - lastHitTimeRef.current < HIT_COOLDOWN_SEC) return;
     lastHitTimeRef.current = now;
 
-    // 가장 가까운 비트 찾기
-    let minDiff = Infinity;
-    for (const tick of lastTickTimesRef.current) {
-      const diff = Math.abs(now - tick.time);
-      if (diff < minDiff) minDiff = diff;
-    }
-    const nextDiff = Math.abs(nextBeatTimeRef.current - now);
-    if (nextDiff < minDiff) minDiff = nextDiff;
+    const minDiff = Math.min(
+      ...lastTickTimesRef.current.map(t => Math.abs(now - t.time)),
+      Math.abs(nextBeatTimeRef.current - now)
+    );
 
     const { score, label, className } = judge(minDiff * 1000);
-
     setTaps(prev => [...prev, score]);
     setFeedback({ label, score, className });
 
-    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
-    feedbackTimeoutRef.current = setTimeout(() => {
-      setFeedback(null);
-      feedbackTimeoutRef.current = null;
-    }, FEEDBACK_DURATION_MS);
+    clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), FEEDBACK_DURATION_MS);
   }, [getAudioCtx, lastTickTimesRef, nextBeatTimeRef]);
 
   const analyzeLoop = useCallback(() => {
     const analyser = analyserRef.current;
     if (!analyser) return;
 
-    const bufferLength = analyser.fftSize;
-    const dataArray = new Uint8Array(bufferLength);
+    const dataArray = new Uint8Array(analyser.fftSize);
+    // sensitivity 0~100 → threshold 90~10 (민감할수록 낮은 임계값)
+    const getThreshold = () => 90 - sensitivityRef.current * 0.8;
 
     const loop = () => {
       analyser.getByteTimeDomainData(dataArray);
 
       let maxDeviation = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const deviation = Math.abs(dataArray[i] - 128);
-        if (deviation > maxDeviation) maxDeviation = deviation;
+      for (let i = 0; i < dataArray.length; i++) {
+        const d = Math.abs(dataArray[i] - 128);
+        if (d > maxDeviation) maxDeviation = d;
       }
 
-      // 볼륨 0~100 스케일 (세제곱근으로 작은 소리도 크게 표시)
-      const normalizedVol = Math.min(100, Math.round(Math.cbrt(maxDeviation / 128) * 100));
-      setVolume(normalizedVol);
+      // 볼륨 0~100 (세제곱근으로 작은 소리도 크게 표시)
+      setVolume(Math.min(100, Math.round(Math.cbrt(maxDeviation / 128) * 100)));
 
-      if (maxDeviation > getThreshold()) {
-        processHit();
-      }
+      if (maxDeviation > getThreshold()) processHit();
 
       micAnimFrameRef.current = requestAnimationFrame(loop);
     };
-
     loop();
-  }, [getThreshold, processHit]);
+  }, [processHit]);
 
   useEffect(() => {
-    if (micReady && analyserRef.current) {
-      analyzeLoop();
-    }
+    if (micReady && analyserRef.current) analyzeLoop();
     return () => {
-      if (micAnimFrameRef.current) {
-        cancelAnimationFrame(micAnimFrameRef.current);
-      }
+      if (micAnimFrameRef.current) cancelAnimationFrame(micAnimFrameRef.current);
     };
   }, [micReady, analyzeLoop]);
 
   useEffect(() => {
     return () => {
       stopMic();
-      if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+      clearTimeout(feedbackTimeoutRef.current);
     };
   }, [stopMic]);
 
   const resetAccuracy = useCallback(() => {
     setTaps([]);
     setFeedback(null);
-    if (feedbackTimeoutRef.current) {
-      clearTimeout(feedbackTimeoutRef.current);
-      feedbackTimeoutRef.current = null;
-    }
+    clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = null;
   }, []);
 
   const totalTaps = taps.length;

@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { useMetronome } from '../hooks/useMetronome';
 import { useMic } from '../hooks/useMic';
@@ -11,15 +11,17 @@ import {
   VOLUME_COLOR_HIGH, VOLUME_COLOR_MID, VOLUME_COLOR_LOW,
 } from '../constants';
 
-function getRank(acc) {
-  return RANKS.find(r => acc >= r.minAcc) || RANKS[RANKS.length - 1];
-}
+const cx = (...classes) => classes.filter(Boolean).join(' ');
 
-function getVolumeColor(vol) {
-  if (vol > VOLUME_HIGH) return VOLUME_COLOR_HIGH;
-  if (vol > VOLUME_MID) return VOLUME_COLOR_MID;
-  return VOLUME_COLOR_LOW;
-}
+const getRank = (acc) => RANKS.find(r => acc >= r.minAcc);
+
+const getVolumeColor = (vol) =>
+  vol > VOLUME_HIGH ? VOLUME_COLOR_HIGH :
+  vol > VOLUME_MID  ? VOLUME_COLOR_MID  :
+                      VOLUME_COLOR_LOW;
+
+const formatTime = (s) =>
+  `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
 export default function Metronome() {
   const metronome = useMetronome();
@@ -33,41 +35,28 @@ export default function Metronome() {
   const captureRef = useRef(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
-  const start = useCallback(async () => {
-    if (!mic.micReady) {
-      await mic.startMic();
-    }
+  const start = async () => {
+    if (!mic.micReady) await mic.startMic();
     mic.resetAccuracy();
     await metronome.startScheduler();
-  }, [mic, metronome]);
+  };
 
-  const stop = useCallback(() => {
-    metronome.stopScheduler();
-  }, [metronome]);
-
-  const handleCapture = useCallback(async () => {
+  const handleCapture = async () => {
     if (!captureRef.current) return;
     setIsCapturing(true);
     await new Promise(r => requestAnimationFrame(r));
     try {
       const canvas = await html2canvas(captureRef.current, { backgroundColor: '#ffffff', scale: 4 });
-      const fileName = `drumstudio_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
+      const fileName = `drumstudio_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
       const link = document.createElement('a');
-      link.download = `${fileName}.png`;
+      link.download = fileName;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } finally {
       setIsCapturing(false);
     }
-  }, []);
-
-  const formatTime = (s) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  const feedbackClass = mic.feedback?.className || '';
   const volColor = getVolumeColor(mic.volume);
   const rank = getRank(mic.accuracy);
 
@@ -115,7 +104,7 @@ export default function Metronome() {
           {SUBDIVISIONS.map(s => (
             <button
               key={s.id}
-              className={'subdiv-btn' + (metronome.subdivision === s.sub ? ' active' : '')}
+              className={cx('subdiv-btn', metronome.subdivision === s.sub && 'active')}
               onClick={() => metronome.setSubdivision(s.sub)}
             >
               {s.label}
@@ -127,19 +116,13 @@ export default function Metronome() {
           {Array.from({ length: BEATS_PER_MEASURE }).map((_, beatIdx) => (
             <div key={beatIdx} className="beat-group">
               {Array.from({ length: metronome.subdivision }).map((_, subIdx) => {
-                const isActive = metronome.currentBeat === beatIdx && metronome.currentSubBeat === subIdx;
                 const isMainBeat = subIdx === 0;
-                const isAccent = beatIdx === 0 && subIdx === 0;
-
+                const isAccent = beatIdx === 0 && isMainBeat;
+                const isActive = metronome.currentBeat === beatIdx && metronome.currentSubBeat === subIdx;
                 return (
                   <div
                     key={subIdx}
-                    className={
-                      'beat-ind' +
-                      (isMainBeat ? ' main' : ' sub') +
-                      (isAccent ? ' accent' : '') +
-                      (isActive ? ' active' : '')
-                    }
+                    className={cx('beat-ind', isMainBeat ? 'main' : 'sub', isAccent && 'accent', isActive && 'active')}
                   />
                 );
               })}
@@ -153,13 +136,9 @@ export default function Metronome() {
 
         <div className="controls-row">
           {!metronome.playing ? (
-            <button className="pixel-btn green" onClick={start}>
-              ▶ 시작
-            </button>
+            <button className="pixel-btn green" onClick={start}>▶ 시작</button>
           ) : (
-            <button className="pixel-btn blue" onClick={stop}>
-              ■ 정지
-            </button>
+            <button className="pixel-btn blue" onClick={metronome.stopScheduler}>■ 정지</button>
           )}
         </div>
       </div>
@@ -173,14 +152,12 @@ export default function Metronome() {
                 <span className="mic-big-icon">🎙️</span>
                 <span>마이크 켜기</span>
               </button>
-              {mic.micError && (
-                <div className="mic-error">{mic.micError}</div>
-              )}
+              {mic.micError && <div className="mic-error">{mic.micError}</div>}
             </div>
           ) : (
             <>
               {mic.feedback && (
-                <div className={`tap-feedback ${feedbackClass}`}>
+                <div className={`tap-feedback ${mic.feedback.className}`}>
                   {mic.feedback.label}
                 </div>
               )}

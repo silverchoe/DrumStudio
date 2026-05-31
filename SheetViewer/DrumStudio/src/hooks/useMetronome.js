@@ -4,6 +4,7 @@ import { BEATS_PER_MEASURE, BPM_DEFAULT, CLICK_GAIN } from '../constants';
 const SCHEDULE_AHEAD_SEC = 0.1;
 const SCHEDULER_INTERVAL_MS = 25;
 const TICK_HISTORY_MAX = 32;
+const SYNTH_FREQ = { accent: 1200, beat: 800, sub: 1600 };
 
 export function useMetronome() {
   const [bpm, setBpm] = useState(BPM_DEFAULT);
@@ -21,7 +22,7 @@ export function useMetronome() {
   const lastTickTimesRef = useRef([]);
   const subdivisionRef = useRef(subdivision);
   const activeOscsRef = useRef([]);
-  // public/sounds/{accent,beat,sub}.wav 가 있으면 그걸 사용, 없으면 sine 합성
+  // public/sounds/{accent,beat,sub}.wav 있으면 사용, 없으면 sine 합성
   const soundBuffersRef = useRef({ accent: null, beat: null, sub: null });
 
   useEffect(() => { subdivisionRef.current = subdivision; }, [subdivision]);
@@ -33,21 +34,15 @@ export function useMetronome() {
     return audioCtxRef.current;
   }, []);
 
-  // mount 시 사운드 파일 로드 시도 (없으면 silent skip)
   useEffect(() => {
     const ctx = getAudioCtx();
-    const load = async (name) => {
+    ['accent', 'beat', 'sub'].forEach(async (name) => {
       try {
         const res = await fetch(`${process.env.PUBLIC_URL}/sounds/${name}.wav`);
         if (!res.ok) return;
-        const arr = await res.arrayBuffer();
-        const buf = await ctx.decodeAudioData(arr);
-        soundBuffersRef.current[name] = buf;
-      } catch (e) { /* fallback to synth */ }
-    };
-    load('accent');
-    load('beat');
-    load('sub');
+        soundBuffersRef.current[name] = await ctx.decodeAudioData(await res.arrayBuffer());
+      } catch { /* fallback to synth */ }
+    });
   }, [getAudioCtx]);
 
   // type: 'accent' (강박), 'beat' (약박), 'sub' (서브디비전)
@@ -59,17 +54,12 @@ export function useMetronome() {
 
     const buffer = soundBuffersRef.current[type];
     let source;
-
     if (buffer) {
-      // 샘플 파일 재생
       source = ctx.createBufferSource();
       source.buffer = buffer;
     } else {
-      // Fallback: sine 합성
       source = ctx.createOscillator();
-      if (type === 'accent') source.frequency.value = 1200;
-      else if (type === 'beat') source.frequency.value = 800;
-      else source.frequency.value = 1600;
+      source.frequency.value = SYNTH_FREQ[type];
       gain.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
     }
     source.connect(gain);
@@ -92,43 +82,26 @@ export function useMetronome() {
     const totalTicks = BEATS_PER_MEASURE * sub;
     const subInterval = 60.0 / bpm / sub;
 
-    let lastMainBeat = -1;
-    let lastSubBeat = -1;
+    let mainBeat = -1, subBeat = -1;
 
     while (nextBeatTimeRef.current < ctx.currentTime + SCHEDULE_AHEAD_SEC) {
       const tickIdx = beatIndexRef.current % totalTicks;
-      const mainBeat = Math.floor(tickIdx / sub);
-      const subBeat = tickIdx % sub;
+      mainBeat = Math.floor(tickIdx / sub);
+      subBeat = tickIdx % sub;
 
-      const isAccent = tickIdx === 0;
-      const isMainBeat = subBeat === 0;
+      const type = tickIdx === 0 ? 'accent' : subBeat === 0 ? 'beat' : 'sub';
+      playClick(type, nextBeatTimeRef.current);
 
-      if (isAccent) {
-        playClick('accent', nextBeatTimeRef.current);
-      } else if (isMainBeat) {
-        playClick('beat', nextBeatTimeRef.current);
-      } else {
-        playClick('sub', nextBeatTimeRef.current);
-      }
+      lastTickTimesRef.current.push({ time: nextBeatTimeRef.current, beat: mainBeat, sub: subBeat });
+      if (lastTickTimesRef.current.length > TICK_HISTORY_MAX) lastTickTimesRef.current.shift();
 
-      lastTickTimesRef.current.push({
-        time: nextBeatTimeRef.current,
-        beat: mainBeat,
-        sub: subBeat,
-      });
-      if (lastTickTimesRef.current.length > TICK_HISTORY_MAX) {
-        lastTickTimesRef.current.shift();
-      }
-
-      lastMainBeat = mainBeat;
-      lastSubBeat = subBeat;
       beatIndexRef.current++;
       nextBeatTimeRef.current += subInterval;
     }
 
-    if (lastMainBeat >= 0) {
-      setCurrentBeat(lastMainBeat);
-      setCurrentSubBeat(lastSubBeat);
+    if (mainBeat >= 0) {
+      setCurrentBeat(mainBeat);
+      setCurrentSubBeat(subBeat);
     }
   }, [bpm, playClick, getAudioCtx]);
 
@@ -140,10 +113,8 @@ export function useMetronome() {
     lastTickTimesRef.current = [];
     setElapsed(0);
 
-    schedulerRef.current = setInterval(() => scheduleBeats(), SCHEDULER_INTERVAL_MS);
-    timerRef.current = setInterval(() => {
-      setElapsed(prev => prev + 1);
-    }, 1000);
+    schedulerRef.current = setInterval(scheduleBeats, SCHEDULER_INTERVAL_MS);
+    timerRef.current = setInterval(() => setElapsed(prev => prev + 1), 1000);
 
     setPlaying(true);
   }, [getAudioCtx, scheduleBeats]);
@@ -154,7 +125,7 @@ export function useMetronome() {
     schedulerRef.current = null;
     timerRef.current = null;
 
-    // 이미 Web Audio 스케줄러에 예약된 oscillator 즉시 종료
+    // 이미 Web Audio에 예약된 oscillator 즉시 종료
     const ctx = audioCtxRef.current;
     if (ctx) {
       const now = ctx.currentTime;
@@ -163,7 +134,7 @@ export function useMetronome() {
           gain.gain.cancelScheduledValues(now);
           gain.gain.setValueAtTime(0, now);
           osc.stop(now);
-        } catch (e) { /* 이미 끝났거나 아직 start 전이면 무시 */ }
+        } catch { /* 이미 끝났거나 아직 start 전이면 무시 */ }
       }
       activeOscsRef.current = [];
     }
@@ -172,19 +143,17 @@ export function useMetronome() {
     setCurrentBeat(-1);
   }, []);
 
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      clearInterval(schedulerRef.current);
-      clearInterval(timerRef.current);
-    };
+  // unmount 시 인터벌 정리
+  useEffect(() => () => {
+    clearInterval(schedulerRef.current);
+    clearInterval(timerRef.current);
   }, []);
 
   // BPM 변경 시 스케줄러 갱신
   useEffect(() => {
     if (playing) {
       clearInterval(schedulerRef.current);
-      schedulerRef.current = setInterval(() => scheduleBeats(), SCHEDULER_INTERVAL_MS);
+      schedulerRef.current = setInterval(scheduleBeats, SCHEDULER_INTERVAL_MS);
     }
   }, [bpm, playing, scheduleBeats]);
 
